@@ -1,3 +1,4 @@
+import { applyCallUpdate } from "./calls";
 import type { Call } from "../types";
 
 type Listener = (update: Partial<Call>) => void;
@@ -12,14 +13,15 @@ export function connectSocket() {
   if (!socketTimer) {
     socketTimer = setInterval(() => {
       const callId = String(Math.floor(Math.random() * 1000));
-      const update: Partial<Call> = {
+      const update: Pick<Call, "id"> & Partial<Call> = {
         id: callId,
         status: Math.random() > 0.5 ? "active" : "hold",
         updatedAt: Date.now(),
       };
+      const syncedUpdate = applyCallUpdate(update) ?? update;
 
       for (const listener of listeners) {
-        listener(update);
+        listener(syncedUpdate);
       }
     }, 1000);
   }

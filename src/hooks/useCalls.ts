@@ -5,7 +5,8 @@ import type { Call, UpdateCallStatusInput } from "../types";
 export const CALLS_QUERY_KEY = ["calls"] as const;
 
 type UpdateCallStatusContext = {
-  previousCalls?: Call[];
+  optimisticStatus: Call["status"];
+  previousCall?: Call;
 };
 
 export function useCalls() {
@@ -23,29 +24,47 @@ export function useCalls() {
     UpdateCallStatusInput,
     UpdateCallStatusContext
   >({
+    mutationKey: ["update-call-status"],
     mutationFn: ({ id, status }) => updateCallStatus(id, status),
 
     onMutate: async ({ id, status }) => {
       await queryClient.cancelQueries({ queryKey: CALLS_QUERY_KEY });
 
-      const previousCalls = queryClient.getQueryData<Call[]>(CALLS_QUERY_KEY);
-      if (!previousCalls) {
-        return { previousCalls };
-      }
+      const previousCall = queryClient
+        .getQueryData<Call[]>(CALLS_QUERY_KEY)
+        ?.find((call) => call.id === id);
 
       queryClient.setQueryData<Call[]>(CALLS_QUERY_KEY, (calls) =>
-        calls?.map((call) =>
-          call.id === id ? { ...call, status } : call,
-        ) ?? [],
+        calls?.map((call) => (call.id === id ? { ...call, status } : call)) ?? calls,
       );
 
-      return { previousCalls };
+      return { previousCall, optimisticStatus: status };
     },
 
-    onError: (_error, _variables, context) => {
-      if (context?.previousCalls) {
-        queryClient.setQueryData<Call[]>(CALLS_QUERY_KEY, context.previousCalls);
+    onError: async (_error, variables, context) => {
+      if (context?.previousCall) {
+        const { previousCall } = context;
+
+        queryClient.setQueryData<Call[]>(CALLS_QUERY_KEY, (calls) => {
+          if (!calls) {
+            return calls;
+          }
+
+          return calls.map((call) => {
+            if (call.id !== variables.id) {
+              return call;
+            }
+
+            const canRollbackOptimisticState =
+              call.status === context.optimisticStatus &&
+              call.updatedAt === previousCall.updatedAt;
+
+            return canRollbackOptimisticState ? previousCall : call;
+          });
+        });
       }
+
+      await queryClient.invalidateQueries({ queryKey: CALLS_QUERY_KEY });
     },
 
     onSuccess: (updatedCall) => {

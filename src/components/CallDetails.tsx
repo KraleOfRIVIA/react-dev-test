@@ -44,7 +44,11 @@ export function CallDetails() {
     );
   }
 
-  const isHoldActionDisabled = updateStatus.isPending || call.status === "hold";
+  const isUpdatingSelectedCall =
+    updateStatus.isPending && updateStatus.variables?.id === call.id;
+  const hasSelectedCallMutationError =
+    updateStatus.isError && updateStatus.variables?.id === call.id;
+  const isHoldActionDisabled = isUpdatingSelectedCall || call.status === "hold";
 
   return (
     <div className="flex items-center justify-center">
@@ -56,10 +60,10 @@ export function CallDetails() {
           disabled={isHoldActionDisabled}
           onClick={() => updateStatus.mutate({ id: call.id, status: "hold" })}
         >
-          {updateStatus.isPending ? "Updating..." : "Hold"}
+          {isUpdatingSelectedCall ? "Updating..." : "Hold"}
         </button>
 
-        {updateStatus.isError ? (
+        {hasSelectedCallMutationError ? (
           <p className="text-red-700" role="alert">
             Failed to update status: {getErrorMessage(updateStatus.error)}
           </p>

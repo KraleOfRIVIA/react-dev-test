@@ -8,12 +8,30 @@ const calls: Call[] = Array.from({ length: 1000 }).map((_, i) => ({
   updatedAt: Date.now(),
 }));
 
+function cloneCall(call: Call): Call {
+  return { ...call };
+}
+
 export function fetchCalls(): Promise<Call[]> {
   return new Promise((resolve) => {
     setTimeout(() => {
-      resolve(calls);
+      resolve(calls.map(cloneCall));
     }, 800);
   });
+}
+
+export function applyCallUpdate(
+  update: Partial<Call> & Pick<Call, "id">,
+): Call | null {
+  const call = calls.find((currentCall) => currentCall.id === update.id);
+
+  if (!call) {
+    return null;
+  }
+
+  Object.assign(call, update);
+
+  return cloneCall(call);
 }
 
 export function updateCallStatus(
@@ -36,7 +54,7 @@ export function updateCallStatus(
       call.status = status;
       call.updatedAt = Date.now();
 
-      resolve(call);
+      resolve(cloneCall(call));
     }, 600);
   });
 }
