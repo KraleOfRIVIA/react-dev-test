@@ -1,6 +1,6 @@
 import type { Call } from "../types";
 
-let calls: Call[] = Array.from({ length: 1000 }).map((_, i) => ({
+const calls: Call[] = Array.from({ length: 1000 }).map((_, i) => ({
   id: String(i),
   phone: `+1-555-${1000 + i}`,
   status: "incoming",
@@ -27,7 +27,12 @@ export function updateCallStatus(
         return;
       }
 
-      const call = calls.find((c) => c.id === id)!;
+      const call = calls.find((c) => c.id === id);
+      if (!call) {
+        reject(new Error("Call not found"));
+        return;
+      }
+
       call.status = status;
       call.updatedAt = Date.now();
 

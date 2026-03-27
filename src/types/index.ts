@@ -7,3 +7,8 @@ export type Call = {
   duration: number;
   updatedAt: number;
 };
+
+export type UpdateCallStatusInput = {
+  id: Call["id"];
+  status: CallStatus;
+};
