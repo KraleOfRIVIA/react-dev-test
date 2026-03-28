@@ -1,30 +1,82 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { fetchCalls, updateCallStatus } from "../api/calls";
+import type { Call, UpdateCallStatusInput } from "../types";
+
+export const CALLS_QUERY_KEY = ["calls"] as const;
+
+type UpdateCallStatusContext = {
+  optimisticStatus: Call["status"];
+  previousCall?: Call;
+};
 
 export function useCalls() {
   const queryClient = useQueryClient();
 
-  const callsQuery = useQuery({
-    queryKey: ["calls"],
+  const callsQuery = useQuery<Call[], Error>({
+    queryKey: CALLS_QUERY_KEY,
     queryFn: fetchCalls,
-    refetchOnWindowFocus: true,
+    refetchOnWindowFocus: false,
   });
 
-  const updateStatus = useMutation({
-    mutationFn: updateCallStatus,
+  const updateStatus = useMutation<
+    Call,
+    Error,
+    UpdateCallStatusInput,
+    UpdateCallStatusContext
+  >({
+    mutationKey: ["update-call-status"],
+    mutationFn: ({ id, status }) => updateCallStatus(id, status),
 
-    onMutate: async ({ id, status }: any) => {
-      const prev = queryClient.getQueryData<any[]>(["calls"]);
+    onMutate: async ({ id, status }) => {
+      await queryClient.cancelQueries({ queryKey: CALLS_QUERY_KEY });
 
-      queryClient.setQueryData(["calls"], (calls: any[]) =>
-        calls.map((c) => (c.id === id ? { ...c, status } : c)),
+      const previousCall = queryClient
+        .getQueryData<Call[]>(CALLS_QUERY_KEY)
+        ?.find((call) => call.id === id);
+
+      queryClient.setQueryData<Call[]>(CALLS_QUERY_KEY, (calls) =>
+        calls?.map((call) => (call.id === id ? { ...call, status } : call)) ?? calls,
       );
 
-      return { prev };
+      return { previousCall, optimisticStatus: status };
     },
 
-    onError: (_err, _vars, ctx) => {
-      queryClient.setQueryData(["calls"], ctx?.prev);
+    onError: async (_error, variables, context) => {
+      if (context?.previousCall) {
+        const { previousCall } = context;
+
+        queryClient.setQueryData<Call[]>(CALLS_QUERY_KEY, (calls) => {
+          if (!calls) {
+            return calls;
+          }
+
+          return calls.map((call) => {
+            if (call.id !== variables.id) {
+              return call;
+            }
+
+            const canRollbackOptimisticState =
+              call.status === context.optimisticStatus &&
+              call.updatedAt === previousCall.updatedAt;
+
+            return canRollbackOptimisticState ? previousCall : call;
+          });
+        });
+      }
+
+      await queryClient.invalidateQueries({ queryKey: CALLS_QUERY_KEY });
+    },
+
+    onSuccess: (updatedCall) => {
+      queryClient.setQueryData<Call[]>(CALLS_QUERY_KEY, (calls) => {
+        if (!calls) {
+          return calls;
+        }
+
+        return calls.map((call) =>
+          call.id === updatedCall.id ? { ...call, ...updatedCall } : call,
+        );
+      });
     },
   });
 

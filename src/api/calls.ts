@@ -1,6 +1,6 @@
 import type { Call } from "../types";
 
-let calls: Call[] = Array.from({ length: 1000 }).map((_, i) => ({
+const calls: Call[] = Array.from({ length: 1000 }).map((_, i) => ({
   id: String(i),
   phone: `+1-555-${1000 + i}`,
   status: "incoming",
@@ -8,12 +8,30 @@ let calls: Call[] = Array.from({ length: 1000 }).map((_, i) => ({
   updatedAt: Date.now(),
 }));
 
+function cloneCall(call: Call): Call {
+  return { ...call };
+}
+
 export function fetchCalls(): Promise<Call[]> {
   return new Promise((resolve) => {
     setTimeout(() => {
-      resolve(calls);
+      resolve(calls.map(cloneCall));
     }, 800);
   });
+}
+
+export function applyCallUpdate(
+  update: Partial<Call> & Pick<Call, "id">,
+): Call | null {
+  const call = calls.find((currentCall) => currentCall.id === update.id);
+
+  if (!call) {
+    return null;
+  }
+
+  Object.assign(call, update);
+
+  return cloneCall(call);
 }
 
 export function updateCallStatus(
@@ -27,11 +45,16 @@ export function updateCallStatus(
         return;
       }
 
-      const call = calls.find((c) => c.id === id)!;
+      const call = calls.find((c) => c.id === id);
+      if (!call) {
+        reject(new Error("Call not found"));
+        return;
+      }
+
       call.status = status;
       call.updatedAt = Date.now();
 
-      resolve(call);
+      resolve(cloneCall(call));
     }, 600);
   });
 }
